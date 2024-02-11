@@ -1,6 +1,7 @@
 #include <arpa/inet.h>
 #include <asm-generic/socket.h>
 #include <netinet/in.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -21,27 +22,37 @@ int main() {
   int opt = 1;
 
   int sockfd = socket(AF_INET, SOCK_STREAM, 0);
-  setsockopt(sockfd, SOL_SOCKET, SO_REUSEPORT | SO_REUSEADDR, &opt,
-             sizeof(opt));
-
-  if (bind(sockfd, (struct sockaddr *)&address, sizeof(address)) < 0) {
+  if (setsockopt(sockfd, SOL_SOCKET, SO_REUSEPORT | SO_REUSEADDR, &opt,
+                 sizeof(opt)) < 0) {
+    perror("Failed to create socket");
     exit(EXIT_FAILURE);
   }
 
-  if (listen(sockfd, 1) < 0) {
+  if (bind(sockfd, (struct sockaddr *)&address, sizeof(address)) < 0) {
+    perror("Failed to bin socket to address");
+    exit(EXIT_FAILURE);
+  }
+
+  if (listen(sockfd, 3) < 0) {
+    perror("Socket failed to listen for incoming clients");
     exit(EXIT_FAILURE);
   }
 
   printf("Listening at on port %d\n", PORT);
 
-  int client;
-  if ((client = accept(sockfd, (struct sockaddr *)&address,
-                       (socklen_t *)&addresslen)) < 0) {
-    exit(EXIT_FAILURE);
+  while (true) {
+
+    int client;
+    if ((client = accept(sockfd, (struct sockaddr *)&address,
+                         (socklen_t *)&addresslen)) < 0) {
+      perror("Failed to accept new client");
+      exit(EXIT_FAILURE);
+    }
+
+    write(client, "Hello World!\n", 18);
+    close(client);
   }
 
-  write(client, "Hello World!\n", 18);
-  printf("Hellow World sent to client\n");
-  close(client);
+  printf("Closing Server\n");
   exit(EXIT_SUCCESS);
 }
