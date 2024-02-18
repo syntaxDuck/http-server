@@ -13,7 +13,7 @@
 int main() {
   int sockfd;
   struct sockaddr_in server_addr;
-  char *message = "GET / HTTP/1.1\r\nHost: localhost\r\n\r\n";
+  char *message = "GET / HTTP/10.32\r\nHost: localhost\r\n\r\n";
   char buffer[BUFFER_SIZE] = {0};
 
   // Create socket file descriptor
