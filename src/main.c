@@ -1,5 +1,6 @@
 #include <arpa/inet.h>
 #include <asm-generic/socket.h>
+#include <ctype.h>
 #include <netinet/in.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -10,50 +11,115 @@
 
 #define PORT 8080
 
-void get_request_type(char **string) {
+typedef enum {
+  REQUEST,
+} Header;
+
+typedef enum {
+  GET,
+  SET,
+} Request_Method;
+
+typedef struct {
+  char *path;
+} URI;
+
+typedef enum {
+  HTTP,
+} Protocol_Type;
+
+typedef struct {
+  Protocol_Type type;
+  int major_version;
+  int minor_version;
+} Protocol;
+
+typedef struct {
+  Request_Method method;
+  Protocol protocol;
+} HTTP_Request;
+
+void remove_whitespace(char *str);
+Request_Method get_request_method(char **string);
+Protocol get_protocol(char **string);
+void get_protocol_version(char **string, Protocol *protocol);
+
+void remove_whitespace(char *str) {
+  int len = strlen(str);
+  char new_str[len];
+
+  int j = 0;
+  for (int i = 0; i < len; i++) {
+    if (!isspace(str[i])) {
+      new_str[j++] = str[i];
+      str[i] = '\0';
+    }
+  }
+
+  strcpy(str, new_str);
+}
+
+Request_Method get_request_method(char **string) {
+  char *pos = strstr(*string, " ");
+  int offset = pos - *string;
+
+  char method[offset + 1];
+  strncpy(method, *string, offset);
+  method[offset] = '\0';
+
+  *string = ++pos;
+
+  if (strcmp(method, "GET") == 0) {
+    return GET;
+  } else if (strcmp(method, "SET") == 0)
+    return SET;
+  else
+    return -1;
+}
+
+Protocol get_protocol(char **string) {
+  Protocol protocol;
   char *pos = strstr(*string, "/");
   int offset = pos - *string;
 
-  char request_type[offset + 1];
-  strncpy(request_type, *string, offset);
-  request_type[offset] = '\0';
+  char protocol_type[offset + 1];
+  strncpy(protocol_type, *string, offset);
+  protocol_type[offset] = '\0';
+  remove_whitespace(protocol_type);
 
-  printf("%s\n", request_type);
-
-  *string = ++pos;
-}
-
-void get_protocol(char **string) {
-  char *pos = strstr(*string, "/");
-  int offset = pos - *string;
-
-  char protocol[offset + 1];
-  strncpy(protocol, *string, offset);
-  protocol[offset] = '\0';
-
-  printf("%s\n", protocol);
+  if (strcmp(protocol_type, "HTTP"))
+    protocol.type = HTTP;
+  else
+    protocol.type = -1;
 
   *string = ++pos;
+
+  get_protocol_version(string, &protocol);
+  return protocol;
 }
 
-void get_protocol_version(char **string) {
-  char minor_version[10];
-
+void get_protocol_version(char **string, Protocol *protocol) {
   char *pos = strstr(*string, ".");
   int offset = pos - *string;
   char major_version[offset + 1];
 
   strncpy(major_version, *string, offset);
   major_version[offset] = '\0';
-  strcpy(minor_version, *string + offset + 1);
-
-  printf("%s\n", major_version);
-  printf("%s\n", minor_version);
+  protocol->major_version = atoi(major_version);
 
   *string = ++pos;
+
+  int chars_left = strlen(*string);
+
+  char minor_version[chars_left];
+  strcpy(minor_version, *string + offset + 1);
+  protocol->minor_version = atoi(minor_version);
+
+  *string = pos + chars_left;
 }
 
 void process_header(char *buff) {
+  HTTP_Request request;
   char t_buff[strlen(buff)];
   strcpy(t_buff, buff);
 
@@ -62,9 +128,8 @@ void process_header(char *buff) {
 
   char **pos = &line;
 
-  get_request_type(pos);
-  get_protocol(pos);
-  get_protocol_version(pos);
+  request.method = get_request_method(pos);
+  request.protocol = get_protocol(pos);
 }
 
 int main() {
