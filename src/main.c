@@ -36,13 +36,14 @@ typedef struct {
 
 typedef struct {
   Request_Method method;
+  URI uri;
   Protocol protocol;
 } HTTP_Request;
 
 void remove_whitespace(char *str);
-Request_Method get_request_method(char **string);
-Protocol get_protocol(char **string);
-void get_protocol_version(char **string, Protocol *protocol);
+Request_Method get_request_method(char *string);
+Protocol_Type get_protocol(char *string);
+void get_protocol_version(char *string, Protocol *protocol);
 
 void remove_whitespace(char *str) {
   int len = strlen(str);
@@ -59,63 +60,47 @@ void remove_whitespace(char *str) {
   strcpy(str, new_str);
 }
 
-Request_Method get_request_method(char **string) {
-  char *pos = strstr(*string, " ");
-  int offset = pos - *string;
-
-  char method[offset + 1];
-  strncpy(method, *string, offset);
-  method[offset] = '\0';
-
-  *string = ++pos;
-
-  if (strcmp(method, "GET") == 0) {
+Request_Method get_request_method(char *string) {
+  if (strcmp(string, "GET") == 0) {
     return GET;
-  } else if (strcmp(method, "SET") == 0)
+  } else if (strcmp(string, "SET") == 0)
     return SET;
   else
     return -1;
 }
 
-Protocol get_protocol(char **string) {
-  Protocol protocol;
-  char *pos = strstr(*string, "/");
-  int offset = pos - *string;
+Protocol_Type get_protocol(char *string) {
+  char *pos = strstr(string, "/");
+  int offset = pos - string;
 
-  char protocol_type[offset + 1];
-  strncpy(protocol_type, *string, offset);
-  protocol_type[offset] = '\0';
-  remove_whitespace(protocol_type);
+  char protocol[offset + 1];
+  strncpy(protocol, string, offset);
+  protocol[offset] = '\0';
 
-  if (strcmp(protocol_type, "HTTP"))
-    protocol.type = HTTP;
+  if (strcmp(protocol, "HTTP") == 0)
+    return HTTP;
   else
-    protocol.type = -1;
-
-  *string = ++pos;
-
-  get_protocol_version(string, &protocol);
-  return protocol;
+    return -1;
 }
 
-void get_protocol_version(char **string, Protocol *protocol) {
-  char *pos = strstr(*string, ".");
-  int offset = pos - *string;
+void get_protocol_version(char *string, Protocol *protocol) {
+  char *pos1 = strstr(string, "/");
+  char *pos2 = strstr(string, ".");
+  int offset = pos2 - pos1 - 1;
   char major_version[offset + 1];
 
-  strncpy(major_version, *string, offset);
+  strncpy(major_version, ++pos1, offset);
   major_version[offset] = '\0';
   protocol->major_version = atoi(major_version);
 
-  *string = ++pos;
+  string = pos2++;
 
-  int chars_left = strlen(*string);
+  int chars_left = strlen(pos2);
 
   char minor_version[chars_left];
-  strcpy(minor_version, *string + offset + 1);
+  major_version[chars_left - 1] = '\0';
+  strcpy(minor_version, pos2);
   protocol->minor_version = atoi(minor_version);
-
-  *string = pos + chars_left;
 }
 
 void process_header(char *buff) {
@@ -126,10 +111,16 @@ void process_header(char *buff) {
   char *line;
   line = strtok(t_buff, "\n");
 
-  char **pos = &line;
+  char method[20];
+  char uri[255];
+  char protocol[20];
 
-  request.method = get_request_method(pos);
-  request.protocol = get_protocol(pos);
+  sscanf(line, "%s %s %s", method, uri, protocol);
+
+  request.method = get_request_method(method);
+  request.uri.path = uri;
+  request.protocol.type = get_protocol(protocol);
+  get_protocol_version(protocol, &request.protocol);
 }
 
 int main() {
