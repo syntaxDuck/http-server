@@ -44,6 +44,7 @@ void remove_whitespace(char *str);
 Request_Method get_request_method(char *string);
 Protocol_Type get_protocol(char *string);
 void get_protocol_version(char *string, Protocol *protocol);
+void get_resource(char *uri);
 
 void remove_whitespace(char *str) {
   int len = strlen(str);
@@ -123,14 +124,7 @@ void process_header(char *buff) {
   get_protocol_version(protocol, &request.protocol);
 }
 
-int main() {
-  int server_fd, new_socket;
-  struct sockaddr_in address;
-  int addresslen = sizeof(address);
-
-  address.sin_family = AF_INET;
-  address.sin_addr.s_addr = INADDR_ANY;
-  address.sin_port = htons(PORT);
+int init_socket(struct sockaddr_in address) {
 
   int opt = 1;
 
@@ -151,7 +145,24 @@ int main() {
     exit(EXIT_FAILURE);
   }
 
-  printf("Listening at at IP: %d, Port: %d\n", address.sin_addr.s_addr, PORT);
+  // printf("Listening at at IP: %d, Port: %d\n", address.sin_addr.s_addr,
+  // PORT);
+
+  return sockfd;
+}
+
+int main() {
+  char cwd[1024];
+  getcwd(cwd, sizeof(cwd));
+
+  struct sockaddr_in address;
+  int addresslen = sizeof(address);
+
+  address.sin_family = AF_INET;
+  address.sin_addr.s_addr = INADDR_ANY;
+  address.sin_port = htons(PORT);
+
+  int sockfd = init_socket(address);
 
   while (true) {
 
