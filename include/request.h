@@ -23,10 +23,12 @@ typedef struct {
   Request_Method method;
   URI uri;
   Protocol protocol;
+  int error;
 } Request;
 
-Request_Method get_method(char *string);
-Protocol_Type get_protocol(char *string);
-void get_protocol_version(char *string, Protocol *protocol);
-void get_resource(char *uri);
+int get_method(Request_Method *method, char *string);
+int get_protocol(Protocol *protocol, char *string);
+int get_protocol_version(Protocol *protocol, char *string);
+int get_resource(char *uri);
+int process_header(Request *request, char *buff);
 #endif // !REQUEST_H

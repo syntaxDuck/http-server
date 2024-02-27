@@ -3,6 +3,7 @@
 #include <ctype.h>
 #include <netinet/in.h>
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -25,26 +26,6 @@ typedef struct {
   Connection connection;
   Request request;
 } Client;
-
-void process_header(char *buff) {
-  Request request;
-  char t_buff[strlen(buff)];
-  strcpy(t_buff, buff);
-
-  char *line;
-  line = strtok(t_buff, "\n");
-
-  char method[20];
-  char uri[255];
-  char protocol[20];
-
-  sscanf(line, "%s %s %s", method, uri, protocol);
-
-  request.method = get_method(method);
-  request.uri.path = uri;
-  request.protocol.type = get_protocol(protocol);
-  get_protocol_version(protocol, &request.protocol);
-}
 
 Connection init_server() {
 
@@ -77,15 +58,14 @@ Connection init_server() {
   return server;
 }
 
-void handle_connection(int srv_fd) {
+// FIX: Getting segment fault here, sometimes works sometimes doesnt 🤷
+int handle_connection(int srv_fd) {
   Connection client;
   client.addr_len = sizeof(client.addr);
-  // int client;
-  struct sockaddr_in cli_addr;
-  socklen_t addr_len;
 
   int valread;
-  char buffer[BUFFER_SIZE];
+  char rbuff[BUFFER_SIZE];
+  char wbuff[BUFFER_SIZE];
 
   if ((client.fd = accept(srv_fd, (struct sockaddr *)&client.addr,
                           (socklen_t *)&client.addr_len)) < 0) {
@@ -97,7 +77,7 @@ void handle_connection(int srv_fd) {
 
   while (true) {
 
-    valread = read(client.fd, buffer, BUFFER_SIZE);
+    valread = read(client.fd, rbuff, BUFFER_SIZE);
     if (valread < 0) {
       perror("Error reading request");
       break;
@@ -108,27 +88,89 @@ void handle_connection(int srv_fd) {
       break;
     }
 
-    printf("\nClient Request:\n%s\n", buffer);
+    printf("\nClient Request:\n%s\n", rbuff);
 
-    // process_header(buffer);
-    char *response = "HTTP/1.0 200 OK\nContent-Type: "
-                     "text/plain\nContent-Length: 12\n\nHello World\n";
+    Request request;
+    process_header(&request, rbuff);
+
+    if (request.error) {
+      char *response = "HTTP/1.1 200 OK\nContent-Type: "
+                       "text/html\nContent-Length: 12\n\n404 Not Found\n";
+      break;
+    }
+
+    FILE *file;
+    char *file_contents = NULL;
+    size_t file_size = 0;
+
+    file = fopen(request.uri.path, "r");
+
+    while (fgets(wbuff, BUFFER_SIZE, file) != NULL) {
+      size_t buff_size = strlen(wbuff);
+      char *new_contents = realloc(file_contents, file_size + buff_size + 1);
+      if (new_contents == NULL) {
+        perror("Error allocating memory");
+        fclose(file);
+        if (file_contents != NULL)
+          free(file_contents);
+        return 1;
+      }
+
+      file_contents = new_contents;
+      memcpy(file_contents + file_size, wbuff, buff_size);
+      file_size += buff_size;
+      file_contents[file_size] = '\0';
+    }
+
+    fclose(file);
+
+    // printf("file_contents:\n%s\n", file_contents);
+
+    char *pos_resp = "HTTP/1.1 200 OK\nContent-Type: "
+                     "text/html\nContent-Length:";
+
+    char *response = malloc(strlen(pos_resp) + file_size + 5);
+
+    memcpy(response, pos_resp, strlen(pos_resp));
+    sprintf(response + strlen(pos_resp), " %ld\n\n", file_size);
+    memcpy(response + strlen(response), file_contents, file_size);
+
+    printf("%s\n", response);
 
     send(client.fd, response, strlen(response), 0);
 
-    printf("Sent response...\n");
-
-    if (strstr(buffer, "Connection: keep-alive") == NULL) {
+    // printf("Sent response...\n");
+    //
+    if (strstr(rbuff, "Connection: keep-alive") == NULL) {
       printf("Closing conection...\n");
+      free(file_contents);
+      free(response);
       break;
     }
+
+    free(file_contents);
+    free(response);
   }
   close(client.fd);
+  return 0;
 }
 
-int main() {
-  char cwd[BUFFER_SIZE];
-  getcwd(cwd, sizeof(cwd));
+int main(int argc, char *argv[]) {
+
+  char root[255];
+
+  for (int i = 0; i < argc; i++) {
+    if (strcmp(argv[i], "--root")) {
+      if (i + 1 < argc) {
+        strcpy(root, argv[i + 1]);
+        i++;
+      } else
+        printf("Error: Missing value for root directory");
+    } else
+      printf("Unknown argument: %s\n", argv[i]);
+  }
+
+  chdir(root);
 
   Connection server = init_server();
 
