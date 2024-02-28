@@ -58,7 +58,8 @@ Connection init_server() {
   return server;
 }
 
-// FIX: Getting segment fault here, sometimes works sometimes doesnt 🤷
+// TODO: handle 404 and other error cases
+// TODO: handle icon request
 int handle_connection(int srv_fd) {
   Connection client;
   client.addr_len = sizeof(client.addr);
@@ -66,6 +67,7 @@ int handle_connection(int srv_fd) {
   int valread;
   char rbuff[BUFFER_SIZE];
   char wbuff[BUFFER_SIZE];
+  Request request;
 
   if ((client.fd = accept(srv_fd, (struct sockaddr *)&client.addr,
                           (socklen_t *)&client.addr_len)) < 0) {
@@ -90,30 +92,30 @@ int handle_connection(int srv_fd) {
 
     printf("\nClient Request:\n%s\n", rbuff);
 
-    Request request;
     process_header(&request, rbuff);
-
-    if (request.error) {
-      char *response = "HTTP/1.1 200 OK\nContent-Type: "
-                       "text/html\nContent-Length: 12\n\n404 Not Found\n";
-      break;
-    }
 
     FILE *file;
     char *file_contents = NULL;
     size_t file_size = 0;
 
-    file = fopen(request.uri.path, "r");
+    // NOTE: Plus 1 to avoid / we will work around this later
+    file = fopen(request.uri.path + 1, "r");
+
+    if (file == NULL) {
+      perror("Error opening file");
+      break;
+    }
 
     while (fgets(wbuff, BUFFER_SIZE, file) != NULL) {
       size_t buff_size = strlen(wbuff);
       char *new_contents = realloc(file_contents, file_size + buff_size + 1);
+
       if (new_contents == NULL) {
         perror("Error allocating memory");
         fclose(file);
         if (file_contents != NULL)
           free(file_contents);
-        return 1;
+        break;
       }
 
       file_contents = new_contents;
@@ -124,32 +126,26 @@ int handle_connection(int srv_fd) {
 
     fclose(file);
 
-    // printf("file_contents:\n%s\n", file_contents);
-
     char *pos_resp = "HTTP/1.1 200 OK\nContent-Type: "
                      "text/html\nContent-Length:";
 
-    char *response = malloc(strlen(pos_resp) + file_size + 5);
+    char *response = malloc(strlen(pos_resp) + file_size + 10);
 
     memcpy(response, pos_resp, strlen(pos_resp));
     sprintf(response + strlen(pos_resp), " %ld\n\n", file_size);
     memcpy(response + strlen(response), file_contents, file_size);
-
     printf("%s\n", response);
+
+    free(file_contents);
 
     send(client.fd, response, strlen(response), 0);
 
-    // printf("Sent response...\n");
-    //
+    free(response);
+
     if (strstr(rbuff, "Connection: keep-alive") == NULL) {
       printf("Closing conection...\n");
-      free(file_contents);
-      free(response);
       break;
     }
-
-    free(file_contents);
-    free(response);
   }
   close(client.fd);
   return 0;

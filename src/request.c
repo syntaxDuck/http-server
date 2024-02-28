@@ -104,17 +104,21 @@ int process_header(Request *request, char *buff) {
     return -1;
   }
 
-  memcpy(uri + 1, uri, strlen(uri));
-  uri[0] = '.';
+  // Capture the null character in the memcpy: strlen(uri)+1
+  // memcpy(uri + 1, uri, strlen(uri) + 1);
+  // uri[0] = '.';
+  //
+  // printf("%s\n", uri);
+  //
+  // // check if the resource exists
+  // if (access(uri, R_OK) != 0) {
+  //   perror("Error requested resource not found");
+  //   req.error = 404;
+  // } else {
+  //   req.uri.path = uri;
+  // }
 
-  // check if the resource exists
-  if (access(uri, F_OK) != 0) {
-    perror("Error requested resource not found");
-    req.error = 404;
-  } else {
-    req.uri.path = uri;
-  }
-
+  req.uri.path = uri;
   *request = req;
 
   return 0;
