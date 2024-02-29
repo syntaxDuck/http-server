@@ -74,6 +74,7 @@ int handle_connection(int srv_fd) {
     perror("Failed to accept new client");
     exit(EXIT_FAILURE);
   }
+
   printf("\nClient %s:%d Connected\n", inet_ntoa(client.addr.sin_addr),
          ntohs(client.addr.sin_port));
 
@@ -92,14 +93,13 @@ int handle_connection(int srv_fd) {
 
     printf("\nClient Request:\n%s\n", rbuff);
 
-    process_header(&request, rbuff);
+    processRequestHeader(&request, rbuff);
 
     FILE *file;
     char *file_contents = NULL;
     size_t file_size = 0;
 
-    // NOTE: Plus 1 to avoid / we will work around this later
-    file = fopen(request.uri.path + 1, "r");
+    file = fopen(request.uri.path, "rb");
 
     if (file == NULL) {
       perror("Error opening file");
@@ -124,10 +124,22 @@ int handle_connection(int srv_fd) {
       file_contents[file_size] = '\0';
     }
 
+    printf("%s\n", request.uri.path);
+
     fclose(file);
 
-    char *pos_resp = "HTTP/1.1 200 OK\nContent-Type: "
+    char *pos_resp;
+    char *img_resp = "HTTP/1.1 200 OK\nContent-Type: "
+                     "image/png\r\n\r\n";
+
+    char *txt_resp = "HTTP/1.1 200 OK\nContent-Type: "
                      "text/html\nContent-Length:";
+
+    if (strstr(request.uri.path, "png")) {
+      pos_resp = img_resp;
+    } else {
+      pos_resp = txt_resp;
+    }
 
     char *response = malloc(strlen(pos_resp) + file_size + 10);
 
@@ -141,6 +153,7 @@ int handle_connection(int srv_fd) {
     send(client.fd, response, strlen(response), 0);
 
     free(response);
+    free(request.uri.path);
 
     if (strstr(rbuff, "Connection: keep-alive") == NULL) {
       printf("Closing conection...\n");

@@ -1,34 +1,47 @@
 #ifndef REQUEST_H
 
+#define MAX_URI_LENGTH 255
+#define MAX_METHOD_LENGTH 10
+#define MAX_PROTOCOL_LENGTH 10
+#define INVALID_VERSION_NUMBER -1
+#define INVALID_REQUEST_HEADER -1
+
 typedef enum {
-  GET,
-  SET,
-} Request_Method;
+  REQUEST_GET,
+  REQUEST_SET,
+  REQUEST_INVALID = -1,
+} RequestMethod;
+
+typedef enum {
+  PROTOCOL_HTTP,
+  PROTOCOL_INVALID = -1,
+} ProtocolType;
 
 typedef struct {
   char *path;
-} URI;
-
-typedef enum {
-  HTTP,
-} Protocol_Type;
+} Uri;
 
 typedef struct {
-  Protocol_Type type;
-  int major_version;
-  int minor_version;
+  ProtocolType type;
+  int majorVersion;
+  int minorVersion;
 } Protocol;
 
 typedef struct {
-  Request_Method method;
-  URI uri;
+  int x;
+} RequestDataType;
+
+typedef struct {
+  RequestMethod method;
+  Uri uri;
   Protocol protocol;
   int error;
 } Request;
 
-int get_method(Request_Method *method, char *string);
-int get_protocol(Protocol *protocol, char *string);
-int get_protocol_version(Protocol *protocol, char *string);
-int get_resource(char *uri);
-int process_header(Request *request, char *buff);
+RequestMethod parseRequestMethod(char *methodString);
+ProtocolType parseProtocolType(char *protocolString);
+int parseProtocolVersion(Protocol *protocol, char *versionString);
+
+int getResource(char *uri);
+int processRequestHeader(Request *request, char *headerBuffer);
 #endif // !REQUEST_H
