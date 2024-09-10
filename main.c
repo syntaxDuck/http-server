@@ -1,5 +1,4 @@
 #include <arpa/inet.h>
-#include <asm-generic/socket.h>
 #include <ctype.h>
 #include <netinet/in.h>
 #include <stdbool.h>
@@ -9,6 +8,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <sys/types.h>
 
 #include "request.h"
 #include "util.h"
@@ -16,18 +16,21 @@
 #define PORT 8080
 #define BUFFER_SIZE 1024
 
-typedef struct {
+typedef struct
+{
   int fd;
   struct sockaddr_in addr;
   socklen_t addr_len;
 } Connection;
 
-typedef struct {
+typedef struct
+{
   Connection connection;
   Request request;
 } Client;
 
-Connection init_server() {
+Connection init_server()
+{
 
   Connection server;
 
@@ -39,18 +42,36 @@ Connection init_server() {
   int opt = 1;
 
   server.fd = socket(AF_INET, SOCK_STREAM, 0);
-  if (setsockopt(server.fd, SOL_SOCKET, SO_REUSEPORT | SO_REUSEADDR, &opt,
-                 sizeof(opt)) < 0) {
+  if (server.fd < 0)
+  {
     perror("Failed to create socket");
     exit(EXIT_FAILURE);
   }
 
-  if (bind(server.fd, (struct sockaddr *)&server.addr, server.addr_len) < 0) {
-    perror("Failed to bin socket to address");
+  // Set SO_REUSEADDR option
+  if (setsockopt(server.fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0)
+  {
+    perror("Failed to set SO_REUSEADDR");
+    close(server.fd);
     exit(EXIT_FAILURE);
   }
 
-  if (listen(server.fd, 3) < 0) {
+  // Set SO_REUSEPORT option
+  if (setsockopt(server.fd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt)) < 0)
+  {
+    perror("Failed to set SO_REUSEPORT");
+    close(server.fd);
+    exit(EXIT_FAILURE);
+  }
+
+  if (bind(server.fd, (struct sockaddr *)&server.addr, server.addr_len) < 0)
+  {
+    perror("Failed to bind socket to address");
+    exit(EXIT_FAILURE);
+  }
+
+  if (listen(server.fd, 3) < 0)
+  {
     perror("Socket failed to listen for incoming clients");
     exit(EXIT_FAILURE);
   }
@@ -60,7 +81,8 @@ Connection init_server() {
 
 // TODO: handle 404 and other error cases
 // TODO: handle icon request
-int handle_connection(int srv_fd) {
+int handle_connection(int srv_fd)
+{
   Connection client;
   client.addr_len = sizeof(client.addr);
 
@@ -70,7 +92,8 @@ int handle_connection(int srv_fd) {
   Request request;
 
   if ((client.fd = accept(srv_fd, (struct sockaddr *)&client.addr,
-                          (socklen_t *)&client.addr_len)) < 0) {
+                          (socklen_t *)&client.addr_len)) < 0)
+  {
     perror("Failed to accept new client");
     exit(EXIT_FAILURE);
   }
@@ -78,15 +101,18 @@ int handle_connection(int srv_fd) {
   printf("\nClient %s:%d Connected\n", inet_ntoa(client.addr.sin_addr),
          ntohs(client.addr.sin_port));
 
-  while (true) {
+  while (true)
+  {
 
     valread = read(client.fd, rbuff, BUFFER_SIZE);
-    if (valread < 0) {
+    if (valread < 0)
+    {
       perror("Error reading request");
       break;
     }
 
-    if (valread == 0) {
+    if (valread == 0)
+    {
       printf("Client disconnected...\n");
       break;
     }
@@ -101,16 +127,19 @@ int handle_connection(int srv_fd) {
 
     file = fopen(request.uri.path, "rb");
 
-    if (file == NULL) {
+    if (file == NULL)
+    {
       perror("Error opening file");
       break;
     }
 
-    while (fgets(wbuff, BUFFER_SIZE, file) != NULL) {
+    while (fgets(wbuff, BUFFER_SIZE, file) != NULL)
+    {
       size_t buff_size = strlen(wbuff);
       char *new_contents = realloc(file_contents, file_size + buff_size + 1);
 
-      if (new_contents == NULL) {
+      if (new_contents == NULL)
+      {
         perror("Error allocating memory");
         fclose(file);
         if (file_contents != NULL)
@@ -135,9 +164,12 @@ int handle_connection(int srv_fd) {
     char *txt_resp = "HTTP/1.1 200 OK\nContent-Type: "
                      "text/html\nContent-Length:";
 
-    if (strstr(request.uri.path, "png")) {
+    if (strstr(request.uri.path, "png"))
+    {
       pos_resp = img_resp;
-    } else {
+    }
+    else
+    {
       pos_resp = txt_resp;
     }
 
@@ -155,7 +187,8 @@ int handle_connection(int srv_fd) {
     free(response);
     free(request.uri.path);
 
-    if (strstr(rbuff, "Connection: keep-alive") == NULL) {
+    if (strstr(rbuff, "Connection: keep-alive") == NULL)
+    {
       printf("Closing conection...\n");
       break;
     }
@@ -164,18 +197,24 @@ int handle_connection(int srv_fd) {
   return 0;
 }
 
-int main(int argc, char *argv[]) {
+int main(int argc, char *argv[])
+{
 
   char root[255];
 
-  for (int i = 0; i < argc; i++) {
-    if (strcmp(argv[i], "--root")) {
-      if (i + 1 < argc) {
+  for (int i = 0; i < argc; i++)
+  {
+    if (strcmp(argv[i], "--root"))
+    {
+      if (i + 1 < argc)
+      {
         strcpy(root, argv[i + 1]);
         i++;
-      } else
+      }
+      else
         printf("Error: Missing value for root directory");
-    } else
+    }
+    else
       printf("Unknown argument: %s\n", argv[i]);
   }
 
@@ -190,7 +229,8 @@ int main(int argc, char *argv[]) {
          ntohs(server.addr.sin_port));
 
   // Working loop
-  while (true) {
+  while (true)
+  {
     handle_connection(server.fd);
   }
 

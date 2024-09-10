@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.0)
+cmake_minimum_required(VERSION 3.5)
 
 project(http-server VERSION 0.1)
 
@@ -13,6 +13,5 @@ set(SOURCES main.c src/request.c)
 include_directories(include)
 
 add_executable(http-server main.c ${SOURCES})
-
 
 add_subdirectory(tests)
