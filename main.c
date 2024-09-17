@@ -16,184 +16,195 @@
 #define PORT 8080
 #define BUFFER_SIZE 1024
 
-typedef struct
-{
-  int fd;
-  struct sockaddr_in addr;
-  socklen_t addr_len;
-} Connection;
+#define POSITIVE_RESP 200
+#define RESOURCE_NOT_FOUND 404
 
-typedef struct
-{
-  Connection connection;
-  Request request;
-} Client;
-
-Connection init_server()
+int init_server_socket()
 {
 
-  Connection server;
+  struct sockaddr_in socket_address;
+  socklen_t address_length;
 
-  server.addr.sin_family = AF_INET;
-  server.addr.sin_addr.s_addr = INADDR_ANY;
-  server.addr.sin_port = htons(PORT);
-  server.addr_len = sizeof(server.addr);
+  socket_address.sin_family = AF_INET;
+  socket_address.sin_addr.s_addr = INADDR_ANY;
+  socket_address.sin_port = htons(PORT);
+  address_length = sizeof(socket_address);
 
   int opt = 1;
 
-  server.fd = socket(AF_INET, SOCK_STREAM, 0);
-  if (server.fd < 0)
+  int socket_fd = socket(AF_INET, SOCK_STREAM, 0);
+  if (socket_fd < 0)
   {
     perror("Failed to create socket");
     exit(EXIT_FAILURE);
   }
 
   // Set SO_REUSEADDR option
-  if (setsockopt(server.fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0)
+  if (setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0)
   {
     perror("Failed to set SO_REUSEADDR");
-    close(server.fd);
+    close(socket_fd);
     exit(EXIT_FAILURE);
   }
 
   // Set SO_REUSEPORT option
-  if (setsockopt(server.fd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt)) < 0)
+  if (setsockopt(socket_fd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt)) < 0)
   {
     perror("Failed to set SO_REUSEPORT");
-    close(server.fd);
+    close(socket_fd);
     exit(EXIT_FAILURE);
   }
 
-  if (bind(server.fd, (struct sockaddr *)&server.addr, server.addr_len) < 0)
+  if (bind(socket_fd, (struct sockaddr *)&socket_address, address_length) < 0)
   {
     perror("Failed to bind socket to address");
     exit(EXIT_FAILURE);
   }
 
-  if (listen(server.fd, 3) < 0)
+  return socket_fd;
+}
+
+int read_client_request(int client_fd, char *read_buff)
+{
+  int read_status = read(client_fd, read_buff, BUFFER_SIZE);
+  if (read_status < 0)
   {
-    perror("Socket failed to listen for incoming clients");
-    exit(EXIT_FAILURE);
+    perror("Error reading request");
+    return -1;
   }
 
-  return server;
+  if (read_status == 0)
+  {
+    printf("Client disconnected...\n");
+    return -1;
+  }
+
+  return 0;
+}
+
+char *load_uri(Request request)
+{
+  FILE *file;
+  char *contents = NULL;
+  size_t file_size = 0;
+  char write_buff[BUFFER_SIZE];
+
+  file = fopen(request.uri.path, "rb");
+
+  if (file == NULL)
+  {
+    perror("Error opening file");
+    return NULL;
+  }
+
+  while (fgets(write_buff, BUFFER_SIZE, file) != NULL)
+  {
+    size_t buff_size = strlen(write_buff);
+    char *block = realloc(contents, file_size + buff_size + 1);
+
+    if (block == NULL)
+    {
+      perror("Error allocating memory");
+      fclose(file);
+      if (contents != NULL)
+        free(contents);
+      break;
+    }
+
+    contents = block;
+    memcpy(contents + file_size, write_buff, buff_size);
+    file_size += buff_size;
+    contents[file_size] = '\0';
+  }
+  fclose(file);
+
+  return contents;
+}
+
+char *build_response(Request request, char *content)
+{
+  // TODO: This needs to be refactored
+  char *pos_resp;
+  char *img_resp = "HTTP/1.1 200 OK\nContent-Type: "
+                   "image/png\r\n\r\n";
+
+  char *txt_resp = "HTTP/1.1 200 OK\nContent-Type: "
+                   "text/html\nContent-Length:";
+
+  if (strstr(request.uri.path, "png"))
+  {
+    pos_resp = img_resp;
+  }
+  else
+  {
+    pos_resp = txt_resp;
+  }
+
+  long content_len = strlen(content);
+
+  char *response = malloc(strlen(pos_resp) + content_len + 10);
+
+  memcpy(response, pos_resp, strlen(pos_resp));
+  sprintf(response + strlen(pos_resp), " %ld\n\n", content_len);
+  memcpy(response + strlen(response), content, content_len);
+
+  return response;
 }
 
 // TODO: handle 404 and other error cases
 // TODO: handle icon request
-int handle_connection(int srv_fd)
+int socket_handle_connection(int server_fd)
 {
-  Connection client;
-  client.addr_len = sizeof(client.addr);
+  int client_fd;
+  struct sockaddr_in client_socket_addr;
+  socklen_t addr_len = sizeof(client_socket_addr);
 
-  int valread;
-  char rbuff[BUFFER_SIZE];
-  char wbuff[BUFFER_SIZE];
+  char read_buff[BUFFER_SIZE];
   Request request;
 
-  if ((client.fd = accept(srv_fd, (struct sockaddr *)&client.addr,
-                          (socklen_t *)&client.addr_len)) < 0)
+  if ((client_fd = accept(server_fd, (struct sockaddr *)&client_socket_addr,
+                          (socklen_t *)&addr_len)) < 0)
   {
     perror("Failed to accept new client");
     exit(EXIT_FAILURE);
   }
 
-  printf("\nClient %s:%d Connected\n", inet_ntoa(client.addr.sin_addr),
-         ntohs(client.addr.sin_port));
+  printf("\nClient %s:%d Connected\n", inet_ntoa(client_socket_addr.sin_addr),
+         ntohs(client_socket_addr.sin_port));
 
   while (true)
   {
 
-    valread = read(client.fd, rbuff, BUFFER_SIZE);
-    if (valread < 0)
+    if (read_client_request(client_fd, read_buff) < 0)
     {
-      perror("Error reading request");
       break;
     }
 
-    if (valread == 0)
-    {
-      printf("Client disconnected...\n");
-      break;
-    }
+    printf("\nClient Request:\n%s\n", read_buff);
 
-    printf("\nClient Request:\n%s\n", rbuff);
-
-    processRequestHeader(&request, rbuff);
-
-    FILE *file;
-    char *file_contents = NULL;
-    size_t file_size = 0;
-
-    file = fopen(request.uri.path, "rb");
-
-    if (file == NULL)
-    {
-      perror("Error opening file");
-      break;
-    }
-
-    while (fgets(wbuff, BUFFER_SIZE, file) != NULL)
-    {
-      size_t buff_size = strlen(wbuff);
-      char *new_contents = realloc(file_contents, file_size + buff_size + 1);
-
-      if (new_contents == NULL)
-      {
-        perror("Error allocating memory");
-        fclose(file);
-        if (file_contents != NULL)
-          free(file_contents);
-        break;
-      }
-
-      file_contents = new_contents;
-      memcpy(file_contents + file_size, wbuff, buff_size);
-      file_size += buff_size;
-      file_contents[file_size] = '\0';
-    }
+    process_client_request(&request, read_buff);
 
     printf("%s\n", request.uri.path);
 
-    fclose(file);
+    char *uri_content = load_uri(request);
+    long content_len = strlen(uri_content);
 
-    char *pos_resp;
-    char *img_resp = "HTTP/1.1 200 OK\nContent-Type: "
-                     "image/png\r\n\r\n";
+    char *response = build_response(request, uri_content);
+    free(uri_content);
 
-    char *txt_resp = "HTTP/1.1 200 OK\nContent-Type: "
-                     "text/html\nContent-Length:";
-
-    if (strstr(request.uri.path, "png"))
-    {
-      pos_resp = img_resp;
-    }
-    else
-    {
-      pos_resp = txt_resp;
-    }
-
-    char *response = malloc(strlen(pos_resp) + file_size + 10);
-
-    memcpy(response, pos_resp, strlen(pos_resp));
-    sprintf(response + strlen(pos_resp), " %ld\n\n", file_size);
-    memcpy(response + strlen(response), file_contents, file_size);
     printf("%s\n", response);
 
-    free(file_contents);
-
-    send(client.fd, response, strlen(response), 0);
+    send(client_fd, response, strlen(response), 0);
 
     free(response);
-    free(request.uri.path);
 
-    if (strstr(rbuff, "Connection: keep-alive") == NULL)
+    if (strstr(read_buff, "Connection: keep-alive") == NULL)
     {
       printf("Closing conection...\n");
       break;
     }
   }
-  close(client.fd);
+  close(client_fd);
   return 0;
 }
 
@@ -220,18 +231,25 @@ int main(int argc, char *argv[])
 
   chdir(root);
 
-  Connection server = init_server();
+  int socket_fd = init_server_socket();
+  struct sockaddr_in socket_addr;
+  socklen_t addr_len = sizeof(socket_addr);
+
+  if (listen(socket_fd, 3) < 0)
+  {
+    perror("Socket failed to listen for incoming clients");
+    exit(EXIT_FAILURE);
+  }
 
   // Print the address the socket is listening on
-  getsockname(server.fd, (struct sockaddr *)&server.addr,
-              (socklen_t *)&server.addr_len);
-  printf("Server listening on %s:%d\n", inet_ntoa(server.addr.sin_addr),
-         ntohs(server.addr.sin_port));
+  getsockname(socket_fd, (struct sockaddr *)&socket_addr, &addr_len);
+  printf("Server listening on %s:%d\n", inet_ntoa(socket_addr.sin_addr),
+         ntohs(socket_addr.sin_port));
 
   // Working loop
   while (true)
   {
-    handle_connection(server.fd);
+    socket_handle_connection(socket_fd);
   }
 
   printf("Closing Server\n");

@@ -6,42 +6,47 @@
 #define INVALID_VERSION_NUMBER -1
 #define INVALID_REQUEST_HEADER -1
 
-typedef enum {
+typedef enum
+{
   REQUEST_GET,
   REQUEST_SET,
-  REQUEST_INVALID = -1,
 } RequestMethod;
 
-typedef enum {
+typedef enum
+{
   PROTOCOL_HTTP,
-  PROTOCOL_INVALID = -1,
 } ProtocolType;
 
-typedef struct {
+typedef struct
+{
   char *path;
 } Uri;
 
-typedef struct {
+typedef struct
+{
   ProtocolType type;
-  int majorVersion;
-  int minorVersion;
+  int major_version;
+  int minor_version;
 } Protocol;
 
-typedef struct {
+typedef struct
+{
   int x;
 } RequestDataType;
 
-typedef struct {
+typedef struct
+{
   RequestMethod method;
   Uri uri;
   Protocol protocol;
   int error;
 } Request;
 
-RequestMethod parseRequestMethod(char *methodString);
-ProtocolType parseProtocolType(char *protocolString);
-int parseProtocolVersion(Protocol *protocol, char *versionString);
+int header_parse_protocol(Protocol *protocol, char *protocol_str);
+int header_parse_method(RequestMethod *method, char *method_str);
+int header_parse_protocol_type(Protocol *protocol, char *protocol_str);
+int header_parse_protocol_version(Protocol *protocol, char *version_str);
 
-int getResource(char *uri);
-int processRequestHeader(Request *request, char *headerBuffer);
-#endif // !REQUEST_H
+int get_resource(char *uri);
+int process_client_request(Request *request, char *header_buff);
+#endif

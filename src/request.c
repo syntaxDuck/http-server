@@ -1,104 +1,136 @@
 #include "request.h"
+#include "util.h"
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
 
-RequestMethod parseRequestMethod(char *methodString) {
-  if (methodString == NULL) {
+int header_parse_method(RequestMethod *method, char *method_str)
+{
+  if (method_str == NULL)
+  {
     fprintf(stderr, "Error: NULL pointer passed as methodString\n");
-    return REQUEST_INVALID;
+    return INVALID_REQUEST_HEADER;
   }
 
-  for (int i = 0; methodString[i]; i++) {
-    methodString[i] = toupper(methodString[i]);
+  str_to_upper(method_str);
+
+  if (strcmp(method_str, "GET") == 0)
+  {
+    *method = REQUEST_GET;
   }
-
-  if (strcmp(methodString, "GET") == 0) {
-    return REQUEST_GET;
-  } else if (strcmp(methodString, "SET") == 0) {
-    return REQUEST_SET;
-
-  } else {
-    return REQUEST_INVALID;
+  else if (strcmp(method_str, "SET") == 0)
+  {
+    *method = REQUEST_SET;
   }
-}
-
-ProtocolType parseProtocolType(char *protocolString) {
-  if (protocolString == NULL) {
-    fprintf(stderr, "Error: NULL pointer passed as protocolString\n");
-    return PROTOCOL_INVALID;
-  }
-
-  for (int i = 0; protocolString[i]; i++) {
-    protocolString[i] = toupper(protocolString[i]);
-  }
-
-  char *slashPos = strstr(protocolString, "/");
-  if (slashPos == NULL) {
-    fprintf(stderr, "Error: Invalid protocol string\n");
-    return PROTOCOL_INVALID;
-  }
-  int offset = slashPos - protocolString;
-  char *protocolType = malloc(offset + 1);
-  if (protocolType == NULL) {
-    fprintf(stderr, "Error: unable to allocate memory\n");
-    return PROTOCOL_INVALID;
-  }
-
-  strncpy(protocolType, protocolString, offset);
-  protocolType[offset] = '\0';
-
-  ProtocolType result;
-  if (strcmp(protocolType, "HTTP") == 0) {
-    result = PROTOCOL_HTTP;
-  } else {
-    result = PROTOCOL_INVALID;
-  }
-
-  free(protocolType);
-  return result;
-}
-
-int parseProtocolVersion(Protocol *protocol, char *versionString) {
-  if (versionString == NULL) {
-    fprintf(stderr, "Error: NULL pointer passed as versionString\n");
-    return PROTOCOL_INVALID;
-  }
-
-  while (*versionString && !isdigit(*versionString))
-    versionString++;
-
-  int majorVersion = -1, minorVersion = -1;
-  if (sscanf(versionString, "%d.%d", &majorVersion, &minorVersion) != 2) {
-    fprintf(stderr, "Error: Invalid protocol version format\n");
-    return INVALID_VERSION_NUMBER;
-  }
-
-  protocol->majorVersion = majorVersion;
-  if (protocol->majorVersion < 0) {
-    fprintf(stderr, "Error: Invalid protocol major version");
-    return INVALID_VERSION_NUMBER;
-  }
-
-  protocol->minorVersion = minorVersion;
-  if (protocol->minorVersion < 0) {
-    fprintf(stderr, "Error: Invalid protocol minor version");
-    return INVALID_VERSION_NUMBER;
+  else
+  {
+    return INVALID_REQUEST_HEADER;
   }
 
   return 0;
 }
 
-int processRequestHeader(Request *request, char *buff) {
+int header_parse_protocol(Protocol *protocol, char *protocol_str)
+{
+  if (header_parse_protocol_type(protocol, protocol_str) < 0)
+  {
+    return INVALID_REQUEST_HEADER;
+  }
+  if (header_parse_protocol_version(protocol, protocol_str) < 0)
+  {
+    return INVALID_REQUEST_HEADER;
+  }
+  return 0;
+}
 
-  if (buff == NULL) {
+int header_parse_protocol_type(Protocol *protocol, char *protocol_str)
+{
+  if (protocol_str == NULL)
+  {
+    fprintf(stderr, "Error: NULL pointer passed as protocolString\n");
+    return INVALID_REQUEST_HEADER;
+  }
+
+  str_to_upper(protocol_str);
+
+  char *slash_pos = strstr(protocol_str, "/");
+  if (slash_pos == NULL)
+  {
+    fprintf(stderr, "Error: Invalid protocol string\n");
+    return INVALID_REQUEST_HEADER;
+  }
+  int offset = slash_pos - protocol_str;
+  char *type = malloc(offset + 1);
+  if (type == NULL)
+  {
+    fprintf(stderr, "Error: unable to allocate memory\n");
+    return INVALID_REQUEST_HEADER;
+  }
+
+  strncpy(type, protocol_str, offset);
+  type[offset] = '\0';
+
+  ProtocolType result;
+  if (strcmp(type, "HTTP") == 0)
+  {
+    protocol->type = PROTOCOL_HTTP;
+  }
+  else
+  {
+    return INVALID_REQUEST_HEADER;
+  }
+
+  free(type);
+  return 0;
+}
+
+int header_parse_protocol_version(Protocol *protocol, char *version_str)
+{
+  if (version_str == NULL)
+  {
+    fprintf(stderr, "Error: NULL pointer passed as versionString\n");
+    return INVALID_REQUEST_HEADER;
+  }
+
+  while (*version_str && !isdigit(*version_str))
+    version_str++;
+
+  int major_version = INVALID_VERSION_NUMBER, minor_version = INVALID_VERSION_NUMBER;
+  if (sscanf(version_str, "%d.%d", &major_version, &minor_version) != 2)
+  {
+    fprintf(stderr, "Error: Invalid protocol version format\n");
+    return INVALID_REQUEST_HEADER;
+  }
+
+  protocol->major_version = major_version;
+  if (protocol->major_version < 0)
+  {
+    fprintf(stderr, "Error: Invalid protocol major version");
+    return INVALID_REQUEST_HEADER;
+  }
+
+  protocol->minor_version = minor_version;
+  if (protocol->minor_version < 0)
+  {
+    fprintf(stderr, "Error: Invalid protocol minor version");
+    return INVALID_REQUEST_HEADER;
+  }
+  return 0;
+}
+
+int process_client_request(Request *request, char *buff)
+{
+
+  if (buff == NULL)
+  {
     fprintf(stderr, "Error: NULL pointer passed as buff");
     return INVALID_REQUEST_HEADER;
   }
 
-  if (strlen(buff) == 0) {
+  if (strlen(buff) == 0)
+  {
     fprintf(stderr, "Error: Empty string passes as buff");
     return INVALID_REQUEST_HEADER;
   }
@@ -112,24 +144,27 @@ int processRequestHeader(Request *request, char *buff) {
   //   return INVALID_REQUEST_HEADER;
   // }
 
-  if (sscanf(buff, "%s %s %s", method, uri + strlen(uri), protocol) != 3) {
+  // if (sscanf(buff, "%s %s %s", method, uri + strlen(uri), protocol) != 3) {
+  if (sscanf(buff, "%s %s %s", method, uri, protocol) != 3)
+  {
     fprintf(stderr, "Error: Invalid request header format\n");
     return INVALID_REQUEST_HEADER;
   }
 
-  request->method = parseRequestMethod(method);
-  request->protocol.type = parseProtocolType(protocol);
-
-  if (request->method < 0 || request->protocol.type < 0) {
+  if (header_parse_method(&request->method, method) < 0)
+  {
     return INVALID_REQUEST_HEADER;
   }
 
-  if (parseProtocolVersion(&request->protocol, protocol) < 0)
+  if (header_parse_protocol(&request->protocol, protocol) < 0)
+  {
     return INVALID_REQUEST_HEADER;
+  }
 
   request->uri.path = strdup(uri + 1);
 
-  if (request->uri.path == NULL) {
+  if (request->uri.path == NULL)
+  {
     fprintf(stderr, "Error: Unable to allocate memory for request URI\n");
     return INVALID_REQUEST_HEADER;
   }
