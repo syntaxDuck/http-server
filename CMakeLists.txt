@@ -8,7 +8,7 @@ set(CMAKE_C_COMPILER clang)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Define source files
-set(SOURCES main.c src/request.c src/util.c)
+set(SOURCES main.c src/request.c src/response.c src/util.c)
 
 include_directories(include)
 

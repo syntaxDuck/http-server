@@ -120,7 +120,24 @@ int header_parse_protocol_version(Protocol *protocol, char *version_str)
   return 0;
 }
 
-int process_client_request(Request *request, char *buff)
+int process_request(int client_fd, Request *request)
+{
+  char read_buff[BUFFER_SIZE];
+  if (read_request(client_fd, read_buff) < 0)
+  {
+    return -1;
+  }
+
+  printf("\nClient Request:\n%s\n", read_buff);
+  if (parse_request(request, read_buff) < 0)
+  {
+    return -1;
+  }
+
+  return 0;
+}
+
+int parse_request(Request *request, char *buff)
 {
 
   if (buff == NULL)
@@ -138,14 +155,18 @@ int process_client_request(Request *request, char *buff)
   char method[MAX_METHOD_LENGTH];
   char uri[MAX_URI_LENGTH];
   char protocol[MAX_PROTOCOL_LENGTH];
+  char buffer_cpy[BUFFER_SIZE];
+
+  strncpy(buffer_cpy, buff, sizeof(buffer_cpy));
 
   // if (getcwd(uri, MAX_URI_LENGTH) == NULL) {
   //   fprintf(stderr, "Error: Unable to get cwd");
   //   return INVALID_REQUEST_HEADER;
   // }
 
-  // if (sscanf(buff, "%s %s %s", method, uri + strlen(uri), protocol) != 3) {
-  if (sscanf(buff, "%s %s %s", method, uri, protocol) != 3)
+  char *line = strtok(buffer_cpy, "\n");
+
+  if (sscanf(line, "%s %s %s", method, uri, protocol) != 3)
   {
     fprintf(stderr, "Error: Invalid request header format\n");
     return INVALID_REQUEST_HEADER;
@@ -167,6 +188,24 @@ int process_client_request(Request *request, char *buff)
   {
     fprintf(stderr, "Error: Unable to allocate memory for request URI\n");
     return INVALID_REQUEST_HEADER;
+  }
+
+  return 0;
+}
+
+int read_request(int client_fd, char *read_buff)
+{
+  int read_status = read(client_fd, read_buff, BUFFER_SIZE);
+  if (read_status < 0)
+  {
+    perror("Error reading request");
+    return -1;
+  }
+
+  if (read_status == 0)
+  {
+    printf("Client disconnected...\n");
+    return -1;
   }
 
   return 0;
