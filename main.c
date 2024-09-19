@@ -1,158 +1,163 @@
 #include <arpa/inet.h>
-#include <ctype.h>
 #include <netinet/in.h>
-#include <stdbool.h>
-#include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
-#include <sys/types.h>
+#include <signal.h>
+#include <stdbool.h>
 
 #include "response.h"
 #include "request.h"
 #include "util.h"
 
-#define PORT 8080
-#define BUFFER_SIZE 1024
+#define DEFAULT_PORT 8080
+#define MAX_ROOT_LENGTH 255
+#define MAX_PORT_LENGTH 10
 
-#define POSITIVE_RESP 200
-#define RESOURCE_NOT_FOUND 404
+int server_fd;
 
-int init_server_socket()
+int init_server_socket(int port)
 {
+    struct sockaddr_in socket_address;
+    socklen_t address_length = sizeof(socket_address);
+    int opt = 1;
 
-  struct sockaddr_in socket_address;
-  socklen_t address_length;
+    int socket_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (socket_fd < 0)
+    {
+        perror("Failed to create socket");
+        exit(EXIT_FAILURE);
+    }
 
-  socket_address.sin_family = AF_INET;
-  socket_address.sin_addr.s_addr = INADDR_ANY;
-  socket_address.sin_port = htons(PORT);
-  address_length = sizeof(socket_address);
+    // Set SO_REUSEADDR option
+    if (setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0)
+    {
+        perror("Failed to set SO_REUSEADDR");
+        close(socket_fd);
+        exit(EXIT_FAILURE);
+    }
 
-  int opt = 1;
+    // Set SO_REUSEPORT option
+    if (setsockopt(socket_fd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt)) < 0)
+    {
+        perror("Failed to set SO_REUSEPORT");
+        close(socket_fd);
+        exit(EXIT_FAILURE);
+    }
 
-  int socket_fd = socket(AF_INET, SOCK_STREAM, 0);
-  if (socket_fd < 0)
-  {
-    perror("Failed to create socket");
-    exit(EXIT_FAILURE);
-  }
+    socket_address.sin_family = AF_INET;
+    socket_address.sin_addr.s_addr = INADDR_ANY;
+    socket_address.sin_port = htons(port);
 
-  // Set SO_REUSEADDR option
-  if (setsockopt(socket_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0)
-  {
-    perror("Failed to set SO_REUSEADDR");
-    close(socket_fd);
-    exit(EXIT_FAILURE);
-  }
+    if (bind(socket_fd, (struct sockaddr *)&socket_address, address_length) < 0)
+    {
+        perror("Failed to bind socket to address");
+        close(socket_fd);
+        exit(EXIT_FAILURE);
+    }
 
-  // Set SO_REUSEPORT option
-  if (setsockopt(socket_fd, SOL_SOCKET, SO_REUSEPORT, &opt, sizeof(opt)) < 0)
-  {
-    perror("Failed to set SO_REUSEPORT");
-    close(socket_fd);
-    exit(EXIT_FAILURE);
-  }
-
-  if (bind(socket_fd, (struct sockaddr *)&socket_address, address_length) < 0)
-  {
-    perror("Failed to bind socket to address");
-    exit(EXIT_FAILURE);
-  }
-
-  return socket_fd;
+    return socket_fd;
 }
 
-// TODO: handle 404 and other error cases
-// TODO: handle icon request
-int socket_handle_connection(int server_fd)
+void handle_shutdown(int sig)
 {
-  int client_fd;
-  struct sockaddr_in client_socket_addr;
-  socklen_t addr_len = sizeof(client_socket_addr);
+    printf("\nShutting down the server...\n");
+    close(server_fd);
+    exit(EXIT_SUCCESS);
+}
 
-  Request request;
-
-  if ((client_fd = accept(server_fd, (struct sockaddr *)&client_socket_addr,
-                          (socklen_t *)&addr_len)) < 0)
-  {
-    perror("Failed to accept new client");
-    exit(EXIT_FAILURE);
-  }
-
-  printf("\nClient %s:%d Connected\n", inet_ntoa(client_socket_addr.sin_addr),
-         ntohs(client_socket_addr.sin_port));
-
-  while (true)
-  {
+int socket_handle_connection(int client_fd)
+{
+    Request request;
 
     process_request(client_fd, &request);
     process_response(client_fd, request);
 
-    // if (strstr(read_buff, "Connection: keep-alive") == NULL)
-    // {
-    //   printf("Closing conection...\n");
-    //   break;
-    // }
-    break;
-  }
-  close(client_fd);
-  return 0;
+    close(client_fd);
+    return 0;
 }
 
 int parse_args(int argc, char *argv[])
 {
-  char root[255];
-  for (int i = 1; i < argc; i++)
-  {
-    if (strcmp(argv[i], "--root") == 0) // Check if the argument is "--root"
-    {
-      if (i + 1 < argc) // Check if there's another argument after "--root"
-      {
-        strcpy(root, argv[i + 1]); // Copy the next argument to 'root'
-        i++;                       // Skip the next argument (since it's the root path)
-      }
-      else
-      {
-        printf("Error: Missing value for root directory\n");
-        exit(EXIT_FAILURE); // Exit with an error code if no value for root
-      }
-    }
-    else
-    {
-      printf("Unknown argument: %s\n", argv[i]);
-    }
-  }
+    char root[MAX_ROOT_LENGTH] = ".";
+    int port = DEFAULT_PORT;
 
-  chdir(root); // Change to the specified root directory
-  return 0;
+    for (int i = 1; i < argc; i++)
+    {
+        if (strcmp(argv[i], "--root") == 0 || strcmp(argv[i], "-r") == 0)
+        {
+            if (i + 1 < argc)
+            {
+                strncpy(root, argv[i + 1], MAX_ROOT_LENGTH - 1); // Safe string copy
+                root[MAX_ROOT_LENGTH - 1] = '\0';
+                i++;
+            }
+            else
+            {
+                fprintf(stderr, "Error: Missing value for root directory\n");
+                exit(EXIT_FAILURE);
+            }
+        }
+        else if (strcmp(argv[i], "--port") == 0 || strcmp(argv[i], "-p") == 0)
+        {
+            if (i + 1 < argc)
+            {
+                port = atoi(argv[i + 1]);
+                i++;
+            }
+            else
+            {
+                fprintf(stderr, "Error: Missing value for for port\n");
+                exit(EXIT_FAILURE);
+            }
+        }
+        else
+        {
+            fprintf(stderr, "Unknown argument: %s\n", argv[i]);
+        }
+    }
+
+    if (chdir(root) != 0)
+    {
+        perror("Failed to change directory");
+        exit(EXIT_FAILURE);
+    }
+
+    return port;
 }
 
 int main(int argc, char *argv[])
 {
-  int socket_fd = init_server_socket();
-  struct sockaddr_in socket_addr;
-  socklen_t addr_len = sizeof(socket_addr);
+    signal(SIGINT, handle_shutdown);
 
-  if (listen(socket_fd, 3) < 0)
-  {
-    perror("Socket failed to listen for incoming clients");
-    exit(EXIT_FAILURE);
-  }
+    int port = parse_args(argc, argv);
 
-  // Print the address the socket is listening on
-  getsockname(socket_fd, (struct sockaddr *)&socket_addr, &addr_len);
-  printf("Server listening on %s:%d\n", inet_ntoa(socket_addr.sin_addr),
-         ntohs(socket_addr.sin_port));
+    server_fd = init_server_socket(port);
 
-  // Working loop
-  while (true)
-  {
-    socket_handle_connection(socket_fd);
-  }
+    if (listen(server_fd, 3) < 0)
+    {
+        perror("Socket failed to listen for incoming clients");
+        exit(EXIT_FAILURE);
+    }
 
-  printf("Closing Server\n");
-  exit(EXIT_SUCCESS);
+    printf("Server listening on port %d\n", port);
+
+    while (true)
+    {
+        struct sockaddr_in client_socket_addr;
+        socklen_t addr_len = sizeof(client_socket_addr);
+        int client_fd = accept(server_fd, (struct sockaddr *)&client_socket_addr, &addr_len);
+        if (client_fd < 0)
+        {
+            perror("Failed to accept new client");
+            continue;
+        }
+        printf("Client connected: %s:%d\n", inet_ntoa(client_socket_addr.sin_addr), ntohs(client_socket_addr.sin_port));
+        socket_handle_connection(client_fd);
+    }
+
+    printf("Closing Server\n");
+    exit(EXIT_SUCCESS);
 }

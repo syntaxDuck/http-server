@@ -5,6 +5,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdbool.h>
 
 int header_parse_method(RequestMethod *method, char *method_str)
 {
@@ -122,8 +123,8 @@ int header_parse_protocol_version(Protocol *protocol, char *version_str)
 
 int process_request(int client_fd, Request *request)
 {
-  char read_buff[BUFFER_SIZE];
-  if (read_request(client_fd, read_buff) < 0)
+  char *read_buff = read_request(client_fd);
+  if (read_buff == NULL)
   {
     return -1;
   }
@@ -159,11 +160,6 @@ int parse_request(Request *request, char *buff)
 
   strncpy(buffer_cpy, buff, sizeof(buffer_cpy));
 
-  // if (getcwd(uri, MAX_URI_LENGTH) == NULL) {
-  //   fprintf(stderr, "Error: Unable to get cwd");
-  //   return INVALID_REQUEST_HEADER;
-  // }
-
   char *line = strtok(buffer_cpy, "\n");
 
   if (sscanf(line, "%s %s %s", method, uri, protocol) != 3)
@@ -193,20 +189,51 @@ int parse_request(Request *request, char *buff)
   return 0;
 }
 
-int read_request(int client_fd, char *read_buff)
+char *read_request(int client_fd)
 {
-  int read_status = read(client_fd, read_buff, BUFFER_SIZE);
-  if (read_status < 0)
+  size_t total_size = 0;
+  size_t buffer_size = BUFFER_SIZE;
+  char *read_buff = malloc(BUFFER_SIZE);
+  if (read_buff == NULL)
   {
-    perror("Error reading request");
-    return -1;
+    perror("Error allocating memory");
+    return NULL;
   }
-
-  if (read_status == 0)
+  while (true)
   {
-    printf("Client disconnected...\n");
-    return -1;
-  }
+    int read_status = read(client_fd, read_buff + total_size, buffer_size - total_size);
+    if (read_status < 0)
+    {
+      perror("Error reading request");
+      free(read_buff);
+      return NULL;
+    }
 
-  return 0;
+    if (read_status == 0)
+    {
+      break;
+    }
+
+    total_size += read_status;
+
+    if (read_status < BUFFER_SIZE)
+    {
+      break;
+    }
+
+    if (total_size == buffer_size)
+    {
+      buffer_size += BUFFER_SIZE;
+      char *temp = realloc(read_buff, buffer_size);
+      if (temp == NULL)
+      {
+        perror("Error reallocating memory");
+        free(read_buff);
+        return NULL;
+      }
+      read_buff = temp;
+    }
+  }
+  read_buff[total_size] = '\0';
+  return read_buff;
 }

@@ -59,7 +59,8 @@ int header_parse_protocol_type(Protocol *protocol, char *protocol_str);
 int header_parse_protocol_version(Protocol *protocol, char *version_str);
 
 int get_resource(char *uri);
-int read_request(int client_fd, char *buff);
+char *read_request(int client_fd);
 int parse_request(Request *request, char *header_buff);
 int process_request(int client_fd, Request *request);
+void send_response(int, char *, char *);
 #endif
