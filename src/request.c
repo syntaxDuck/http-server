@@ -19,7 +19,7 @@ int header_parse_method(RequestMethod *method, char *method_str)
 
   if (strcmp(method_str, "OPTION"))
   {
-    printf("Method Type Not Supported: OPTION");
+    printf("Method Type Not Supported: OPTION\n");
   }
   else if (strcmp(method_str, "GET") == 0)
   {
@@ -27,27 +27,27 @@ int header_parse_method(RequestMethod *method, char *method_str)
   }
   else if (strcmp(method_str, "HEAD"))
   {
-    printf("Method Type Not Supported: HEAD");
+    printf("Method Type Not Supported: HEAD\n");
   }
   else if (strcmp(method_str, "POST"))
   {
-    printf("Method Type Not Supported: POST");
+    printf("Method Type Not Supported: POST\n");
   }
   else if (strcmp(method_str, "PUT"))
   {
-    printf("Method Type Not Supported: PUT");
+    printf("Method Type Not Supported: PUT\n");
   }
   else if (strcmp(method_str, "DELETE"))
   {
-    printf("Method Type Not Supported: DELETE");
+    printf("Method Type Not Supported: DELETE\n");
   }
   else if (strcmp(method_str, "TRACE"))
   {
-    printf("Method Type Not Supported: TRACE");
+    printf("Method Type Not Supported: TRACE\n");
   }
   else if (strcmp(method_str, "CONNECT"))
   {
-    printf("Method Type Not Supported: CONNECT");
+    printf("Method Type Not Supported: CONNECT\n");
   }
   else
   {

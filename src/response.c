@@ -7,8 +7,8 @@
 
 char *load_uri(Request request, long *content_size)
 {
+  // TODO: This currently cannot handle encoded values, things like %20 etc
   FILE *file;
-
   file = fopen(request.uri.path, "rb");
   if (file == NULL)
   {
