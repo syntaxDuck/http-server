@@ -60,11 +60,13 @@ int process_response(int client_fd, Request request)
   char *contents = load_uri(request, &content_size);
   printf("%s\n", request.uri.path);
 
-  char *header = build_header(request, "", content_size);
+  // Add 2 to the content size to accommodate the CRLF
+  char *header = build_header(request, "", content_size + 2);
   free(request.uri.path);
 
   send(client_fd, header, strlen(header), 0);
   send(client_fd, contents, content_size, 0);
+  send(client_fd, CRLF, content_size, 0);
   free(contents);
   free(header);
   return 0;

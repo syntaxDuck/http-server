@@ -17,13 +17,37 @@ int header_parse_method(RequestMethod *method, char *method_str)
 
   str_to_upper(method_str);
 
-  if (strcmp(method_str, "GET") == 0)
+  if (strcmp(method_str, "OPTION"))
   {
-    *method = REQUEST_GET;
+    printf("Method Type Not Supported: OPTION");
   }
-  else if (strcmp(method_str, "SET") == 0)
+  else if (strcmp(method_str, "GET") == 0)
   {
-    *method = REQUEST_SET;
+    *method = METHOD_GET;
+  }
+  else if (strcmp(method_str, "HEAD"))
+  {
+    printf("Method Type Not Supported: HEAD");
+  }
+  else if (strcmp(method_str, "POST"))
+  {
+    printf("Method Type Not Supported: POST");
+  }
+  else if (strcmp(method_str, "PUT"))
+  {
+    printf("Method Type Not Supported: PUT");
+  }
+  else if (strcmp(method_str, "DELETE"))
+  {
+    printf("Method Type Not Supported: DELETE");
+  }
+  else if (strcmp(method_str, "TRACE"))
+  {
+    printf("Method Type Not Supported: TRACE");
+  }
+  else if (strcmp(method_str, "CONNECT"))
+  {
+    printf("Method Type Not Supported: CONNECT");
   }
   else
   {
