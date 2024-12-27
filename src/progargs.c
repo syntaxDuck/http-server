@@ -1,4 +1,4 @@
-#include "flags.h"
+#include "progargs.h"
 #include "stdbool.h"
 #include <stdio.h>
 #include <stdlib.h>

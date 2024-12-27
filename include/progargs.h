@@ -1,5 +1,5 @@
-#ifndef FLAGS_H
-#define FLAGS_H
+#ifndef PROGARGS_H
+#define PROGARGS_H
 #include <stdbool.h>
 
 typedef struct
