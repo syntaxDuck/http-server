@@ -8,10 +8,11 @@ set(CMAKE_C_COMPILER clang)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # Define source files
-set(SOURCES main.c src/request.c src/response.c src/util.c)
+file(GLOB SOURCES "${CMAKE_SOURCE_DIR}/src/*.c")
+list(APPEND SOURCES main.c)
 
 include_directories(include)
 
-add_executable(http-server main.c ${SOURCES})
+add_executable(http-server ${SOURCES})
 
 add_subdirectory(tests)

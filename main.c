@@ -8,6 +8,7 @@
 #include <signal.h>
 #include <stdbool.h>
 
+#include "progargs.h"
 #include "response.h"
 #include "request.h"
 #include "util.h"
@@ -73,7 +74,7 @@ int socket_handle_connection(int client_fd)
     Request request;
 
     process_request(client_fd, &request);
-    process_response(client_fd, request);
+    process_valueonse(client_fd, request);
 
     close(client_fd);
     return 0;
@@ -132,7 +133,15 @@ int main(int argc, char *argv[])
 {
     signal(SIGINT, handle_shutdown);
 
-    int port = parse_args(argc, argv);
+    const ArgumentDefinition defs[] = {
+        {"port", true},
+        {"root", true}};
+
+    const ArgumentDefinitions prog_args = {defs, 1};
+
+    ParsedArguments *parsed_args = handle_arguments(argc, argv, prog_args);
+
+    const int port = atoi(get_argument_value(parsed_args, "port"));
 
     server_fd = init_server_socket(port);
 
